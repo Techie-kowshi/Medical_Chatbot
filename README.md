@@ -1,6 +1,8 @@
 # Medical Chatbot
 
-A browser-based assistant that answers questions about common symptoms and over-the-counter medicines. Team project.
+A browser-based assistant that answers questions about common symptoms and over-the-counter medicines.
+
+Team project by J Kowshik and K S Vinay Sathvik, completed in the first year of the B.E. in Artificial Intelligence and Machine Learning at B.N.M. Institute of Technology, Bengaluru.
 
 ## How it works
 
