@@ -94,17 +94,14 @@ export const medicineDatabase: Record<string, MedicineInfo> = {
 };
 
 export const findMedicine = (query: string): MedicineInfo | null => {
-  const lowerQuery = query.toLowerCase();
-  
-  // Check generic name matches
+  const words = new Set(query.toLowerCase().match(/[a-z]+/g) ?? []);
   for (const [key, medicine] of Object.entries(medicineDatabase)) {
-    if (lowerQuery.includes(key) || 
-        medicine.genericName.toLowerCase().includes(lowerQuery) ||
-        medicine.brandNames.some(brand => lowerQuery.includes(brand.toLowerCase()))) {
+    const genericWords = medicine.genericName.toLowerCase().match(/[a-z]{5,}/g) ?? [];
+    const names = [key, ...genericWords, ...medicine.brandNames.map(b => b.toLowerCase())];
+    if (names.some(name => words.has(name))) {
       return medicine;
     }
   }
-  
   return null;
 };
 
@@ -125,5 +122,5 @@ export const formatMedicineInfo = (medicine: MedicineInfo): string => {
 
 **Storage:** ${medicine.storage}
 
-⚠️ **Important:** This information is for educational purposes only. Always consult your healthcare provider before starting, stopping, or changing any medication.`;
+**Important:** This information is for educational purposes only. Always consult your healthcare provider before starting, stopping, or changing any medication.`;
 };
