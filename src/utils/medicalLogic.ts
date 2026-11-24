@@ -1,124 +1,140 @@
-
 import { findMedicine, formatMedicineInfo } from './medicineDatabase';
+
+export type Severity = 'low' | 'medium' | 'high';
 
 export interface MedicalResponse {
   message: string;
-  severity: 'low' | 'medium' | 'high';
+  severity: Severity;
   recommendation: string;
 }
 
-export const analyzeMedicalQuery = (query: string): MedicalResponse => {
-  const lowerQuery = query.toLowerCase();
+interface SymptomRule {
+  name: string;
+  keywords: string[];
+  severity: Severity;
+  message: string;
+  recommendation: string;
+}
 
-  // Check if it's a medicine inquiry first
+export const EMERGENCY_NUMBER = '112';
+
+const SEVERITY_RANK: Record<Severity, number> = { low: 0, medium: 1, high: 2 };
+
+export const symptomRules: SymptomRule[] = [
+  {
+    name: 'chest pain',
+    keywords: ['chest pain', 'chest pressure', 'chest tightness', 'heart pain', 'heart attack'],
+    severity: 'high',
+    message: 'Chest pain requires careful evaluation.',
+    recommendation: `If you have severe chest pain, shortness of breath, or pain spreading to your arm or jaw, call ${EMERGENCY_NUMBER} or go to the nearest emergency department now. For mild chest discomfort, avoid strenuous activity and see a doctor promptly.`,
+  },
+  {
+    name: 'fever',
+    keywords: ['fever', 'temperature', 'feverish'],
+    severity: 'medium',
+    message: "It sounds like you're experiencing fever symptoms.",
+    recommendation: 'Rest, drink plenty of fluids, and consider a fever-reducing medicine such as Paracetamol or Ibuprofen. If the fever stays above 101°F (38.3°C) for more than 3 days or reaches 103°F (39.4°C), consult a doctor immediately.',
+  },
+  {
+    name: 'stomach pain',
+    keywords: ['stomach', 'abdominal', 'belly', 'nausea', 'vomiting'],
+    severity: 'medium',
+    message: 'Stomach discomfort can have many causes.',
+    recommendation: 'Eat bland foods, take small sips of water, and avoid dairy and fatty foods. For acidity, medicines such as Omeprazole may help. Seek medical attention if the pain is severe or persistent, or comes with vomiting, fever or blood.',
+  },
+  {
+    name: 'headache',
+    keywords: ['headache', 'head pain', 'migraine'],
+    severity: 'low',
+    message: 'Headaches can have various causes.',
+    recommendation: 'Rest in a quiet, dark room, apply a cold or warm compress, stay hydrated, and consider Paracetamol or Ibuprofen. If headaches are severe, frequent, or come with other symptoms, consult a doctor.',
+  },
+  {
+    name: 'sore throat',
+    keywords: ['sore throat', 'throat pain', 'painful swallowing'],
+    severity: 'low',
+    message: 'Sore throats are commonly caused by viral or bacterial infections.',
+    recommendation: 'Gargle with warm salt water, drink warm liquids, use throat lozenges, and rest your voice. Paracetamol or Ibuprofen can help with pain. If symptoms last beyond 5 days, or you have a high fever or white patches, consult a doctor.',
+  },
+  {
+    name: 'cough',
+    keywords: ['cough', 'coughing'],
+    severity: 'low',
+    message: 'Coughs can be caused by infections or allergies.',
+    recommendation: 'Stay hydrated, try honey or throat lozenges, and avoid smoke and other irritants. See a doctor if the cough lasts more than 2 weeks, produces blood, or comes with fever.',
+  },
+  {
+    name: 'cold',
+    keywords: ['cold', 'runny nose', 'stuffy nose', 'blocked nose', 'congestion'],
+    severity: 'low',
+    message: 'Common cold symptoms are usually manageable at home.',
+    recommendation: 'Rest, drink warm fluids, and use saline nasal drops. Antihistamines such as Cetirizine or Loratadine can help with a runny nose. Most colds resolve within 7 to 10 days. See a doctor if symptoms worsen or last longer.',
+  },
+  {
+    name: 'allergy',
+    keywords: ['allergy', 'allergies', 'allergic', 'hay fever', 'sneezing'],
+    severity: 'low',
+    message: 'Allergic reactions can cause various symptoms.',
+    recommendation: `Avoid known allergens and use antihistamines such as Cetirizine or Loratadine for relief. If you have difficulty breathing or swelling of the face or throat, call ${EMERGENCY_NUMBER} immediately.`,
+  },
+  {
+    name: 'back pain',
+    keywords: ['back pain', 'backache', 'lower back'],
+    severity: 'low',
+    message: 'Back pain can often be managed with self-care.',
+    recommendation: 'Apply ice for the first 24 to 48 hours, then heat. Gentle stretching and Ibuprofen or Paracetamol can help, along with good posture. If the pain is severe, lasts more than a few days, or comes with numbness or tingling, consult a doctor.',
+  },
+];
+
+const GENERAL_MEDICINE_WORDS = ['medicine', 'medicines', 'drug', 'drugs', 'medication', 'tablet', 'tablets', 'pill', 'pills', 'capsule', 'capsules'];
+
+const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export const containsPhrase = (text: string, phrase: string): boolean =>
+  new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'i').test(text);
+
+export const matchSymptoms = (query: string): SymptomRule[] =>
+  symptomRules
+    .filter(rule => rule.keywords.some(keyword => containsPhrase(query, keyword)))
+    .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity]);
+
+export const analyzeMedicalQuery = (query: string): MedicalResponse => {
   const medicine = findMedicine(query);
   if (medicine) {
     return {
-      message: `Here's detailed information about ${medicine.genericName}:`,
+      message: `Here is some information about ${medicine.genericName}:`,
       severity: 'low',
-      recommendation: formatMedicineInfo(medicine)
+      recommendation: formatMedicineInfo(medicine),
     };
   }
 
-  // Check for general medicine-related queries
-  if (lowerQuery.includes('medicine') || lowerQuery.includes('drug') || lowerQuery.includes('medication') || 
-      lowerQuery.includes('tablet') || lowerQuery.includes('pill') || lowerQuery.includes('capsule')) {
+  const matches = matchSymptoms(query);
+  if (matches.length > 0) {
+    const [top, ...rest] = matches;
+    const also = rest.length > 0
+      ? `\n\nYou also mentioned ${rest.map(r => r.name).join(' and ')}. Ask about each one separately for more detail.`
+      : '';
     return {
-      message: "I can provide information about various medicines.",
+      message: top.message,
+      severity: top.severity,
+      recommendation: top.recommendation + also,
+    };
+  }
+
+  if (GENERAL_MEDICINE_WORDS.some(word => containsPhrase(query, word))) {
+    return {
+      message: 'I can give information about common medicines.',
       severity: 'low',
-      recommendation: "Please specify the name of the medicine you'd like to know about. For example, try asking 'Tell me about Paracetamol' or 'What is Ibuprofen used for?'. I have information about common medicines like Paracetamol, Ibuprofen, Cetirizine, Amoxicillin, Metformin, Aspirin, Omeprazole, and Loratadine."
+      recommendation: "Name the medicine you want to know about, for example 'Tell me about Paracetamol'. I have information on Paracetamol, Ibuprofen, Cetirizine, Amoxicillin, Metformin, Aspirin, Omeprazole and Loratadine.",
     };
   }
 
-  // Fever symptoms
-  if (lowerQuery.includes('fever') || lowerQuery.includes('temperature') || lowerQuery.includes('hot')) {
-    return {
-      message: "I understand you're experiencing fever symptoms.",
-      severity: 'medium',
-      recommendation: "For fever: Rest, drink plenty of fluids, and consider fever-reducing medication like Paracetamol or Ibuprofen. If fever persists above 101°F (38.3°C) for more than 3 days or reaches 103°F (39.4°C), please consult a healthcare professional immediately."
-    };
-  }
-
-  // Headache symptoms
-  if (lowerQuery.includes('headache') || lowerQuery.includes('head pain') || lowerQuery.includes('migraine')) {
-    return {
-      message: "Headaches can have various causes.",
-      severity: 'low',
-      recommendation: "For headache relief: Try resting in a quiet, dark room, apply a cold or warm compress, stay hydrated, and consider over-the-counter pain relievers like Paracetamol or Ibuprofen. If headaches are severe, frequent, or accompanied by other symptoms, please consult a doctor."
-    };
-  }
-
-  // Cough symptoms
-  if (lowerQuery.includes('cough') || lowerQuery.includes('coughing')) {
-    return {
-      message: "Coughs can be caused by various factors including infections or allergies.",
-      severity: 'low',
-      recommendation: "For cough management: Stay hydrated, use honey or throat lozenges, avoid irritants like smoke. If cough persists for more than 2 weeks, produces blood, or is accompanied by fever, please see a healthcare provider."
-    };
-  }
-
-  // Cold symptoms
-  if (lowerQuery.includes('cold') || lowerQuery.includes('runny nose') || lowerQuery.includes('stuffy nose') || lowerQuery.includes('congestion')) {
-    return {
-      message: "Common cold symptoms are usually manageable at home.",
-      severity: 'low',
-      recommendation: "For cold symptoms: Get plenty of rest, drink warm fluids, use saline nasal drops, and consider decongestants if needed. Antihistamines like Cetirizine or Loratadine can help with runny nose. Most colds resolve within 7-10 days. See a doctor if symptoms worsen or persist beyond 10 days."
-    };
-  }
-
-  // Stomach pain
-  if (lowerQuery.includes('stomach') || lowerQuery.includes('abdominal') || lowerQuery.includes('belly') || lowerQuery.includes('nausea')) {
-    return {
-      message: "Stomach discomfort can have many causes.",
-      severity: 'medium',
-      recommendation: "For stomach issues: Try eating bland foods (BRAT diet), stay hydrated with small sips of water, avoid dairy and fatty foods. For acid-related issues, medications like Omeprazole may help. Seek immediate medical attention if pain is severe, persistent, or accompanied by vomiting, fever, or blood."
-    };
-  }
-
-  // Sore throat
-  if (lowerQuery.includes('sore throat') || lowerQuery.includes('throat pain') || lowerQuery.includes('swallowing')) {
-    return {
-      message: "Sore throats are commonly caused by viral or bacterial infections.",
-      severity: 'low',
-      recommendation: "For sore throat relief: Gargle with warm salt water, drink warm liquids, use throat lozenges, and rest your voice. Pain relievers like Paracetamol or Ibuprofen can help. If symptoms persist beyond 5 days, include high fever, or you see white patches, consult a healthcare provider."
-    };
-  }
-
-  // Allergies
-  if (lowerQuery.includes('allergy') || lowerQuery.includes('allergic') || lowerQuery.includes('hay fever') || lowerQuery.includes('sneezing')) {
-    return {
-      message: "Allergic reactions can cause various symptoms.",
-      severity: 'low',
-      recommendation: "For allergies: Avoid known allergens, use antihistamines like Cetirizine or Loratadine for symptom relief. For seasonal allergies, consider starting treatment before allergy season. If you experience severe allergic reactions (difficulty breathing, swelling), seek emergency medical care immediately."
-    };
-  }
-
-  // Chest pain - higher severity
-  if (lowerQuery.includes('chest pain') || lowerQuery.includes('chest pressure') || lowerQuery.includes('heart')) {
-    return {
-      message: "Chest pain requires careful evaluation.",
-      severity: 'high',
-      recommendation: "⚠️ IMPORTANT: If you're experiencing severe chest pain, shortness of breath, or pain radiating to your arm or jaw, seek emergency medical attention immediately by calling 911. For mild chest discomfort, avoid strenuous activity and consult a healthcare provider promptly."
-    };
-  }
-
-  // Back pain
-  if (lowerQuery.includes('back pain') || lowerQuery.includes('backache')) {
-    return {
-      message: "Back pain is a common issue that can often be managed with self-care.",
-      severity: 'low',
-      recommendation: "For back pain: Apply ice for the first 24-48 hours, then switch to heat. Gentle stretching, over-the-counter pain relievers like Ibuprofen or Paracetamol can help. Maintain good posture. If pain is severe, persists beyond a few days, or includes numbness/tingling, consult a healthcare provider."
-    };
-  }
-
-  // Default response for unrecognized queries
   return {
-    message: "I understand you have a health concern, but I couldn't identify specific symptoms from your message.",
+    message: "I couldn't identify specific symptoms in your message.",
     severity: 'low',
-    recommendation: "I can help with information about common symptoms (fever, headache, cough, cold, etc.) and medicines (Paracetamol, Ibuprofen, Cetirizine, etc.). Try describing your symptoms more specifically or ask about a particular medicine. For any serious health concerns, please consult with a qualified healthcare professional."
+    recommendation: 'I can help with common symptoms (fever, headache, cough, cold and others) and with medicines such as Paracetamol and Cetirizine. Try describing your symptoms more specifically. For any serious concern, please see a qualified doctor.',
   };
 };
 
-export const getWelcomeMessage = (): string => {
-  return "Hello! I'm your Medical Assistant Bot. I can help provide general information about common symptoms, health conditions, and medicines. You can ask me about symptoms like 'I have a fever' or medicine information like 'Tell me about Paracetamol'. How can I help you today?";
-};
+export const getWelcomeMessage = (): string =>
+  "Hello! I can give general information about common symptoms and medicines. Try 'I have a fever' or 'Tell me about Paracetamol'. How can I help?";

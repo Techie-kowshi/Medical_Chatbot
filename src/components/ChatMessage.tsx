@@ -2,6 +2,13 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
+const renderBold = (text: string) =>
+  text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : part
+  );
+
 interface ChatMessageProps {
   message: string;
   isBot: boolean;
@@ -42,10 +49,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isBot, timestamp, se
           )}
           <div className="flex-1">
             <p className={cn(
-              "text-sm leading-relaxed",
+              "text-sm leading-relaxed whitespace-pre-line",
               isBot ? "text-gray-800" : "text-white"
             )}>
-              {message}
+              {isBot ? renderBold(message) : message}
             </p>
             <p className={cn(
               "text-xs mt-2 opacity-70",
